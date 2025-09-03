@@ -1,15 +1,44 @@
-// ✅ 반드시 React를 가져옵니다.
-import React from 'react';
-import { useEffect, useRef, useState } from "react";
+// src/App.jsx
+
+import React, { useEffect, useRef, useState } from "react";
 import { Client } from "@stomp/stompjs";
-import SockJS from "sockjs-client/dist/sockjs.min.js"; // 브라우저용 번들 사용
+import SockJS from "sockjs-client/dist/sockjs.min.js"; // 브라우저 번들 사용
+
+// 스타일 정의
+const styles = {
+    app: { fontFamily: "system-ui, Arial", height: "100vh", display: "flex", flexDirection: "column" },
+    header: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: "1px solid #eee" },
+    refreshBtn: { padding: "6px 10px", borderRadius: 6, border: "1px solid #ddd", cursor: "pointer", background: "#fff" },
+    main: { flex: 1, display: "grid", gridTemplateColumns: "280px 1fr", minHeight: 0 },
+    sidebar: { borderRight: "1px solid #eee", overflow: "auto" },
+    sidebarTitle: { padding: 12, fontWeight: 700, borderBottom: "1px solid #f0f0f0" },
+    chatItem: { width: "100%", textAlign: "left", padding: 12, border: "none", borderBottom: "1px solid #f7f7f7", background: "#fff", cursor: "pointer" },
+    chatItemActive: { background: "#f5f8ff" },
+    chatTitle: { fontWeight: 600, marginBottom: 4 },
+    preview: { fontSize: 12, color: "#666" },
+    section: { display: "flex", flexDirection: "column", minWidth: 0 },
+    roomHeader: { padding: 12, fontWeight: 700, borderBottom: "1px solid #f0f0f0" },
+    messageList: { flex: 1, overflow: "auto", display: "flex", flexDirection: "column", gap: 8, padding: 12 },
+    msgRow: { display: "flex" },
+    msgBubble: { background: "#f6f6f6", borderRadius: 12, padding: 10, maxWidth: 600 },
+    msgMeta: { fontSize: 12, color: "#777", marginBottom: 4 },
+    inputBar: { display: "flex", gap: 8, padding: 12, borderTop: "1px solid #eee" },
+    input: { flex: 1, padding: "10px 12px", borderRadius: 8, border: "1px solid #ddd" },
+    sendBtn: { padding: "10px 14px", borderRadius: 8, border: "1px solid #2b6", background: "#2b6", color: "#fff", cursor: "pointer" },
+    empty: { padding: 16, color: "#666" },
+    error: { padding: 12, color: "#b00", borderTop: "1px solid #f0d0d0", background: "#fff5f5" },
+};
 
 export default function App() {
-    // 상태 선언
-    const USER_ID = 1; // 시드 데이터 기준으로 1=alice
+    // 시드 데이터 기준 사용자 ID (alice=1, bob=2)
+    const USER_ID = 1;
+
+    // STOMP 연결 상태
     const [stomp, setStomp] = useState(null);
     const [connected, setConnected] = useState(false);
     const subRef = useRef(null);
+
+    // 화면 UI 상태
     const [chats, setChats] = useState([]);
     const [selectedChatId, setSelectedChatId] = useState(null);
     const [messages, setMessages] = useState([]);
@@ -17,7 +46,7 @@ export default function App() {
     const [loading, setLoading] = useState(false);
     const [err, setErr] = useState("");
 
-    // STOMP 연결(한 번만)
+    // 최초 한 번: STOMP 클라이언트 연결
     useEffect(() => {
         const client = new Client({
             webSocketFactory: () => new SockJS("/ws"),
@@ -33,7 +62,7 @@ export default function App() {
         };
     }, []);
 
-    // 방 선택 시 구독 관리
+    // 방 선택 시 구독 처리
     useEffect(() => {
         if (!stomp || !connected || !selectedChatId) return;
         // 기존 구독 해제
@@ -46,10 +75,12 @@ export default function App() {
             try {
                 const body = JSON.parse(frame.body);
                 setMessages(prev => [body, ...prev]);
-            } catch { /* ignore */ }
+            } catch {
+                // JSON 파싱 실패 시 무시
+            }
         });
         subRef.current = sub;
-        // 정리
+        // cleanup
         return () => {
             try { sub.unsubscribe(); } catch {}
             subRef.current = null;
@@ -106,7 +137,7 @@ export default function App() {
             });
             if (!res.ok) throw new Error(`전송 실패 ${res.status}`);
             const msg = await res.json();
-            // 낙관적 갱신: 바로 목록 갱신
+            // 낙관적 갱신: STOMP로도 방송되므로 중복될 수 있음
             setMessages(prev => [msg, ...prev]);
             setText("");
         } catch (e) {
@@ -114,15 +145,86 @@ export default function App() {
         }
     }
 
-    // 최초 방 목록
-    useEffect(() => { loadChats(); }, []);
+    // 앱 시작 시 한 번 방 목록 불러오기
+    useEffect(() => {
+        loadChats();
+    }, []);
 
     return (
         <div style={styles.app}>
-            {/* UI 내용은 기존과 동일 */}
-            {/* ... */}
+            <header style={styles.header}>
+                <h1 style={{ margin: 0 }}>Mini Chat</h1>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 12, color: connected ? "#2b6" : "#b00" }}>
+            {connected ? "WS 연결됨" : "WS 연결안됨"}
+          </span>
+                    <button onClick={loadChats} style={styles.refreshBtn}>
+                        ⟳ 새로고침
+                    </button>
+                </div>
+            </header>
+
+            <div style={styles.main}>
+                {/* 왼쪽 채팅방 리스트 */}
+                <aside style={styles.sidebar}>
+                    <div style={styles.sidebarTitle}>내 채팅방</div>
+                    {chats.length === 0 && <div style={styles.empty}>방이 없습니다</div>}
+                    {chats.map(c => (
+                        <button
+                            key={c.chatId}
+                            style={{
+                                ...styles.chatItem,
+                                ...(selectedChatId === c.chatId ? styles.chatItemActive : {}),
+                            }}
+                            onClick={() => loadMessages(c.chatId)}
+                        >
+                            <div style={styles.chatTitle}>
+                                {c.type === "DIRECT" ? "1:1" : "그룹"} · #{c.chatId}
+                            </div>
+                            <div style={styles.preview}>{c.lastMessagePreview ?? ""}</div>
+                        </button>
+                    ))}
+                </aside>
+
+                {/* 오른쪽 메시지 영역 */}
+                <section style={styles.section}>
+                    {!selectedChatId ? (
+                        <div style={styles.empty}>왼쪽에서 방을 선택하세요</div>
+                    ) : (
+                        <>
+                            <div style={styles.roomHeader}>채팅방 #{selectedChatId}</div>
+                            <div style={styles.messageList}>
+                                {loading && <div style={styles.empty}>불러오는 중...</div>}
+                                {!loading && messages.length === 0 && (
+                                    <div style={styles.empty}>메시지가 없습니다</div>
+                                )}
+                                {messages.map(m => (
+                                    <div key={m.id} style={styles.msgRow}>
+                                        <div style={styles.msgBubble}>
+                                            <div style={styles.msgMeta}>
+                                                보낸이:{m.senderId} · {new Date(m.createdAt).toLocaleString()}
+                                            </div>
+                                            <div>{m.content}</div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <form onSubmit={sendMessage} style={styles.inputBar}>
+                                <input
+                                    value={text}
+                                    onChange={e => setText(e.target.value)}
+                                    placeholder="메시지를 입력하세요"
+                                    style={styles.input}
+                                />
+                                <button style={styles.sendBtn}>보내기</button>
+                            </form>
+                        </>
+                    )}
+                </section>
+            </div>
+
+            {err && <div style={styles.error}>⚠ {err}</div>}
         </div>
     );
 }
-
-// styles 객체는 기존과 동일하므로 생략
