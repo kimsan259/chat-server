@@ -1,0 +1,27 @@
+<configuration>
+    <springProperty scope="context" name="springProfile" source="spring.profiles.active" defaultValue="dev"/>
+
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder><pattern>%d{HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n</pattern></encoder>
+    </appender>
+
+    <!-- PROD에서만 파일+비동기 사용 -->
+    <springProfile name="prod">
+        <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>logs/app.log</file>
+            <encoder><pattern>%d %-5level %logger - %msg%n</pattern></encoder>
+            <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+                <fileNamePattern>logs/app.%d{yyyy-MM-dd}.log</fileNamePattern>
+                <maxHistory>7</maxHistory>
+            </rollingPolicy>
+        </appender>
+        <appender name="ASYNC_FILE" class="ch.qos.logback.classic.AsyncAppender">
+            <appender-ref ref="FILE"/>
+        </appender>
+        <root level="INFO"><appender-ref ref="ASYNC_FILE"/></root>
+    </springProfile>
+
+    <springProfile name="dev">
+        <root level="INFO"><appender-ref ref="STDOUT"/></root>
+    </springProfile>
+</configuration>

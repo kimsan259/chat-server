@@ -1,0 +1,21 @@
+<!doctype html>
+<meta charset="utf-8"/>
+<h3>Send Message</h3>
+<label>UserId <input id="uid" value="1"></label>
+<label>ChatId <input id="cid" value="1"></label>
+<label>Content <input id="ctt" value="hello"></label>
+<button onclick="send()">POST /api/messages</button>
+
+<script>
+    async function send(){
+        const uid = document.getElementById('uid').value;
+        const cid = Number(document.getElementById('cid').value);
+        const ctt = document.getElementById('ctt').value;
+        const res = await fetch('/api/messages', {
+            method:'POST',
+            headers:{'Content-Type':'application/json','X-USER-ID':uid},
+            body: JSON.stringify({chatId:cid, content:ctt})
+        });
+        alert(await res.text());
+    }
+</script>
