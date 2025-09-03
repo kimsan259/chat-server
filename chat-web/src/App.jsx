@@ -1,3 +1,5 @@
+// ✅ 반드시 React를 가져옵니다.
+import React from 'react';
 import { useEffect, useRef, useState } from "react";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client/dist/sockjs.min.js"; // 브라우저용 번들 사용
