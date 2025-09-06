@@ -121,7 +121,7 @@ export default function App() {
         }
     }
 
-    // 메시지 전송
+// 메시지 전송
     async function sendMessage(e) {
         e.preventDefault();
         if (!selectedChatId || !text.trim()) return;
@@ -136,14 +136,14 @@ export default function App() {
                 body: JSON.stringify({ chatId: selectedChatId, content: text }),
             });
             if (!res.ok) throw new Error(`전송 실패 ${res.status}`);
-            const msg = await res.json();
-            // 낙관적 갱신: STOMP로도 방송되므로 중복될 수 있음
-            setMessages(prev => [msg, ...prev]);
+            // ❗ 여기서 setMessages(...)를 호출하지 않고,
+            // WebSocket 브로드캐스트에 의해 목록이 갱신되도록 둡니다.
             setText("");
         } catch (e) {
             setErr(String(e));
         }
     }
+
 
     // 앱 시작 시 한 번 방 목록 불러오기
     useEffect(() => {
