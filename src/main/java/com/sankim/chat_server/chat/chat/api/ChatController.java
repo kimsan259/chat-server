@@ -32,3 +32,6 @@ public class ChatController {
     }
 
 }
+
+// redis cache 에 안읽음 정보를 저장해놓는게 좋겠다
+// 또는 특정 채팅방에 참여중인 유저 id 를 저장해놓는게 좋겠다.

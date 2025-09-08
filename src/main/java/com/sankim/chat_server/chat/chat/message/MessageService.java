@@ -40,6 +40,25 @@ public class MessageService {
                 msg.getId(), chat.getId(), sender.getId(),
                 msg.getContentType(), msg.getContent(),
                 msg.getCreateAt(), 1L);
+
+        // 유저들에게 메시지를 전달해줄때, ex)1000명방 -> 루프 천회
+        // 스레드풀이나 카프카를 이용해서 비동기로 전달해주자.
+        /*
+        List<Long> userIds = userChatRepository.findByUserIdsByChatId(chatId);
+        for(Long userId: userIds){
+            Ws ws = webSocketHandler.getSessionByUserId(userId);
+            if(ws == null){
+                // 미접속중(소켓이 연결되어있지 않다.)
+                fcmClient.push(new MessageResponse));
+            } else {
+                // 접속중
+                ws.send(new TextMessage(new MessageResponse)));
+            }
+        }
+
+        */
+
+
         // 커밋 후 브로드캐스트
         eventPublisher.publishEvent(new MessageCreatedEvent(dto));
         return dto;
