@@ -1,10 +1,8 @@
 // src/App.jsx
+import React, { useEffect, useState } from "react";
+import SockJS from "sockjs-client/dist/sockjs.min.js"; // 브라우저용 번들
 
-import React, { useEffect, useRef, useState } from "react";
-import { Client } from "@stomp/stompjs";
-import SockJS from "sockjs-client/dist/sockjs.min.js"; // 브라우저 번들 사용
-
-// 스타일 정의
+// 스타일 정의 그대로 사용
 const styles = {
     app: { fontFamily: "system-ui, Arial", height: "100vh", display: "flex", flexDirection: "column" },
     header: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: "1px solid #eee" },
@@ -30,15 +28,14 @@ const styles = {
 };
 
 export default function App() {
-    // 시드 데이터 기준 사용자 ID (alice=1, bob=2)
+    // 시드 데이터 기준 사용자 ID (로그인 시스템 대체)
     const USER_ID = 1;
 
-    // STOMP 연결 상태
-    const [stomp, setStomp] = useState(null);
+    // SockJS 인스턴스와 연결 상태
+    const [socket, setSocket] = useState(null);
     const [connected, setConnected] = useState(false);
-    const subRef = useRef(null);
 
-    // 화면 UI 상태
+    // UI 상태들
     const [chats, setChats] = useState([]);
     const [selectedChatId, setSelectedChatId] = useState(null);
     const [messages, setMessages] = useState([]);
@@ -46,48 +43,39 @@ export default function App() {
     const [loading, setLoading] = useState(false);
     const [err, setErr] = useState("");
 
-    // 최초 한 번: STOMP 클라이언트 연결
+    /**
+     * 최초 1회: SockJS로 서버의 /ws-handler 엔드포인트에 연결
+     * - 쿼리스트링으로 userId 전달 (Handshake 인터셉터가 읽음)
+     * - onopen: 연결 성공시 상태 업데이트
+     * - onmessage: 서버에서 브로드캐스트하는 메시지를 수신
+     * - onclose: 연결 종료시 상태 초기화
+     */
     useEffect(() => {
-        const client = new Client({
-            webSocketFactory: () => new SockJS("/ws"),
-            reconnectDelay: 2000,
-            onConnect: () => setConnected(true),
-            onStompError: () => setConnected(false),
-            onWebSocketClose: () => setConnected(false),
-        });
-        client.activate();
-        setStomp(client);
-        return () => {
-            try { client.deactivate(); } catch {}
+        const sock = new SockJS(`/ws-handler?userId=${USER_ID}`);
+        sock.onopen = () => {
+            setConnected(true);
         };
-    }, []);
-
-    // 방 선택 시 구독 처리
-    useEffect(() => {
-        if (!stomp || !connected || !selectedChatId) return;
-        // 기존 구독 해제
-        if (subRef.current) {
-            try { subRef.current.unsubscribe(); } catch {}
-            subRef.current = null;
-        }
-        // 새 주제 구독
-        const sub = stomp.subscribe(`/topic/chats/${selectedChatId}`, frame => {
+        sock.onmessage = (event) => {
             try {
-                const body = JSON.parse(frame.body);
-                setMessages(prev => [body, ...prev]);
+                const msg = JSON.parse(event.data);
+                // 최신순으로 추가 (서버가 최신순으로 보내므로 맨 앞에 삽입)
+                setMessages((prev) => [msg, ...prev]);
             } catch {
                 // JSON 파싱 실패 시 무시
             }
-        });
-        subRef.current = sub;
-        // cleanup
-        return () => {
-            try { sub.unsubscribe(); } catch {}
-            subRef.current = null;
         };
-    }, [stomp, connected, selectedChatId]);
+        sock.onclose = () => {
+            setConnected(false);
+        };
+        setSocket(sock);
 
-    // 채팅방 목록 불러오기
+        // 컴포넌트 언마운트 시 연결 종료
+        return () => {
+            sock.close();
+        };
+    }, []);
+
+    /** 채팅방 목록 조회 (REST) */
     async function loadChats() {
         try {
             setErr("");
@@ -102,7 +90,7 @@ export default function App() {
         }
     }
 
-    // 메시지 목록 불러오기
+    /** 선택한 방의 메시지 목록 조회 (REST) */
     async function loadMessages(chatId) {
         try {
             setErr("");
@@ -121,55 +109,46 @@ export default function App() {
         }
     }
 
-// 메시지 전송
+    /** 메시지 전송: WebSocket을 통해 JSON 전송 */
     async function sendMessage(e) {
         e.preventDefault();
-        if (!selectedChatId || !text.trim()) return;
+        // 방 선택, 입력값, WebSocket 연결 상태 확인
+        if (!selectedChatId || !text.trim() || !socket || socket.readyState !== 1) return;
         try {
             setErr("");
-            const res = await fetch(`/api/messages`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "X-USER-ID": String(USER_ID),
-                },
-                body: JSON.stringify({ chatId: selectedChatId, content: text }),
-            });
-            if (!res.ok) throw new Error(`전송 실패 ${res.status}`);
-            // ❗ 여기서 setMessages(...)를 호출하지 않고,
-            // WebSocket 브로드캐스트에 의해 목록이 갱신되도록 둡니다.
-            setText("");
+            // 서버가 {chatId, content} JSON을 받으면 저장 후 브로드캐스트
+            socket.send(JSON.stringify({ chatId: selectedChatId, content: text }));
+            setText(""); // 입력창 비움 (낙관적 업데이트 없음)
         } catch (e) {
             setErr(String(e));
         }
     }
 
-
-    // 앱 시작 시 한 번 방 목록 불러오기
+    // 최초에 한 번 채팅방 목록 불러오기
     useEffect(() => {
         loadChats();
     }, []);
 
     return (
         <div style={styles.app}>
+            {/* 상단 헤더: 앱 제목, 연결 상태, 새로고침 */}
             <header style={styles.header}>
                 <h1 style={{ margin: 0 }}>Mini Chat</h1>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 12, color: connected ? "#2b6" : "#b00" }}>
             {connected ? "WS 연결됨" : "WS 연결안됨"}
           </span>
-                    <button onClick={loadChats} style={styles.refreshBtn}>
-                        ⟳ 새로고침
-                    </button>
+                    <button onClick={loadChats} style={styles.refreshBtn}>⟳ 새로고침</button>
                 </div>
             </header>
 
+            {/* 메인 영역: 왼쪽(채팅방 목록) + 오른쪽(메시지 영역) */}
             <div style={styles.main}>
-                {/* 왼쪽 채팅방 리스트 */}
+                {/* 채팅방 목록 */}
                 <aside style={styles.sidebar}>
                     <div style={styles.sidebarTitle}>내 채팅방</div>
                     {chats.length === 0 && <div style={styles.empty}>방이 없습니다</div>}
-                    {chats.map(c => (
+                    {chats.map((c) => (
                         <button
                             key={c.chatId}
                             style={{
@@ -186,7 +165,7 @@ export default function App() {
                     ))}
                 </aside>
 
-                {/* 오른쪽 메시지 영역 */}
+                {/* 메시지 영역 */}
                 <section style={styles.section}>
                     {!selectedChatId ? (
                         <div style={styles.empty}>왼쪽에서 방을 선택하세요</div>
@@ -198,7 +177,8 @@ export default function App() {
                                 {!loading && messages.length === 0 && (
                                     <div style={styles.empty}>메시지가 없습니다</div>
                                 )}
-                                {messages.map(m => (
+                                {/* 메시지 출력 */}
+                                {messages.map((m) => (
                                     <div key={m.id} style={styles.msgRow}>
                                         <div style={styles.msgBubble}>
                                             <div style={styles.msgMeta}>
@@ -210,10 +190,11 @@ export default function App() {
                                 ))}
                             </div>
 
+                            {/* 메시지 입력 폼 */}
                             <form onSubmit={sendMessage} style={styles.inputBar}>
                                 <input
                                     value={text}
-                                    onChange={e => setText(e.target.value)}
+                                    onChange={(e) => setText(e.target.value)}
                                     placeholder="메시지를 입력하세요"
                                     style={styles.input}
                                 />
@@ -224,6 +205,7 @@ export default function App() {
                 </section>
             </div>
 
+            {/* 에러 메시지 표시 */}
             {err && <div style={styles.error}>⚠ {err}</div>}
         </div>
     );
