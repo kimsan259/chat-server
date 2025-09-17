@@ -1,8 +1,8 @@
 // src/App.jsx
 import React, { useEffect, useState } from "react";
-import SockJS from "sockjs-client/dist/sockjs.min.js"; // 브라우저용 번들
+import SockJS from "sockjs-client/dist/sockjs.min.js";
 
-// 스타일 정의 그대로 사용
+// 스타일 정의 (생략 가능)
 const styles = {
     app: { fontFamily: "system-ui, Arial", height: "100vh", display: "flex", flexDirection: "column" },
     header: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: "1px solid #eee" },
@@ -24,18 +24,18 @@ const styles = {
     input: { flex: 1, padding: "10px 12px", borderRadius: 8, border: "1px solid #ddd" },
     sendBtn: { padding: "10px 14px", borderRadius: 8, border: "1px solid #2b6", background: "#2b6", color: "#fff", cursor: "pointer" },
     empty: { padding: 16, color: "#666" },
-    error: { padding: 12, color: "#b00", borderTop: "1px solid #f0d0d0", background: "#fff5f5" },
+    error: { padding: 12, color: "#b00", borderTop: "1px solid #f0d0d0", background: "#fff5f5" }
 };
 
 export default function App() {
-    // 시드 데이터 기준 사용자 ID (로그인 시스템 대체)
+    // (임시) 로그인 대신 사용자 고정
     const USER_ID = 1;
 
-    // SockJS 인스턴스와 연결 상태
+    // WebSocket 상태
     const [socket, setSocket] = useState(null);
     const [connected, setConnected] = useState(false);
 
-    // UI 상태들
+    // 화면 상태
     const [chats, setChats] = useState([]);
     const [selectedChatId, setSelectedChatId] = useState(null);
     const [messages, setMessages] = useState([]);
@@ -44,28 +44,36 @@ export default function App() {
     const [err, setErr] = useState("");
 
     /**
-     * 최초 1회: SockJS로 서버의 /ws-handler 엔드포인트에 연결
-     * - 쿼리스트링으로 userId 전달 (Handshake 인터셉터가 읽음)
-     * - onopen: 연결 성공시 상태 업데이트
-     * - onmessage: 서버에서 브로드캐스트하는 메시지를 수신
-     * - onclose: 연결 종료시 상태 초기화
+     * 1) 컴포넌트 마운트 시 SockJS 연결을 생성
+     *  - userId를 쿼리스트링으로 전달한다. 서버는 HandshakeInterceptor에서 세션 속성으로 저장.
      */
     useEffect(() => {
-        // plain WebSocket으로 접속 (userId를 쿼리스트링으로 전달)
-        const ws = new WebSocket(`ws://localhost:8083/ws-handler?userId=${USER_ID}`);
-        ws.onopen = () => { setConnected(true); };
-        ws.onmessage = e => { const msg = JSON.parse(e.data); setMessages(prev => [msg, ...prev]); };
-        ws.onclose = () => { setConnected(false); };
-        setSocket(ws);
-        return () => { ws.close(); };
+        const sock = new SockJS(`/ws-handler?userId=${USER_ID}`);
+        sock.onopen = () => setConnected(true);
+        sock.onmessage = (event) => {
+            try {
+                const msg = JSON.parse(event.data);
+                // 최신 메시지를 목록에 맨 앞에 추가
+                setMessages((prev) => [msg, ...prev]);
+            } catch {
+                // JSON 파싱 실패 시 무시
+            }
+        };
+        sock.onclose = () => setConnected(false);
+        setSocket(sock);
+
+        // 언마운트 시 소켓 닫기
+        return () => {
+            sock.close();
+        };
     }, []);
 
-    /** 채팅방 목록 조회 (REST) */
+    /** 채팅방 목록을 불러오는 REST API 호출 */
     async function loadChats() {
         try {
             setErr("");
             const res = await fetch(`/api/chats?page=0&size=20`, {
-                headers: { "X-USER-ID": String(USER_ID) },
+                headers: { "X-USER-ID": String(USER_ID) }
             });
             if (!res.ok) throw new Error(`채팅방 목록 실패 ${res.status}`);
             const data = await res.json();
@@ -75,14 +83,14 @@ export default function App() {
         }
     }
 
-    /** 선택한 방의 메시지 목록 조회 (REST) */
+    /** 특정 채팅방의 메시지 목록을 불러오는 REST API 호출 */
     async function loadMessages(chatId) {
         try {
             setErr("");
             setLoading(true);
             setSelectedChatId(chatId);
             const res = await fetch(`/api/messages?chatId=${chatId}&page=0&size=50`, {
-                headers: { "X-USER-ID": String(USER_ID) },
+                headers: { "X-USER-ID": String(USER_ID) }
             });
             if (!res.ok) throw new Error(`메시지 목록 실패 ${res.status}`);
             const data = await res.json();
@@ -94,29 +102,27 @@ export default function App() {
         }
     }
 
-    /** 메시지 전송: WebSocket을 통해 JSON 전송 */
+    /** 메시지 전송: JSON 형태로 socket.send */
     async function sendMessage(e) {
         e.preventDefault();
-        // 방 선택, 입력값, WebSocket 연결 상태 확인
         if (!selectedChatId || !text.trim() || !socket || socket.readyState !== 1) return;
         try {
             setErr("");
-            // 서버가 {chatId, content} JSON을 받으면 저장 후 브로드캐스트
             socket.send(JSON.stringify({ chatId: selectedChatId, content: text }));
-            setText(""); // 입력창 비움 (낙관적 업데이트 없음)
+            setText("");
         } catch (e) {
             setErr(String(e));
         }
     }
 
-    // 최초에 한 번 채팅방 목록 불러오기
+    // 초기 로딩 시 채팅방 목록 가져오기
     useEffect(() => {
         loadChats();
     }, []);
 
     return (
         <div style={styles.app}>
-            {/* 상단 헤더: 앱 제목, 연결 상태, 새로고침 */}
+            {/* 헤더: 앱 제목 + 연결 상태 + 새로고침 버튼 */}
             <header style={styles.header}>
                 <h1 style={{ margin: 0 }}>Mini Chat</h1>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -127,9 +133,8 @@ export default function App() {
                 </div>
             </header>
 
-            {/* 메인 영역: 왼쪽(채팅방 목록) + 오른쪽(메시지 영역) */}
+            {/* 좌측: 채팅방 목록 / 우측: 메시지 영역 */}
             <div style={styles.main}>
-                {/* 채팅방 목록 */}
                 <aside style={styles.sidebar}>
                     <div style={styles.sidebarTitle}>내 채팅방</div>
                     {chats.length === 0 && <div style={styles.empty}>방이 없습니다</div>}
@@ -138,7 +143,7 @@ export default function App() {
                             key={c.chatId}
                             style={{
                                 ...styles.chatItem,
-                                ...(selectedChatId === c.chatId ? styles.chatItemActive : {}),
+                                ...(selectedChatId === c.chatId ? styles.chatItemActive : {})
                             }}
                             onClick={() => loadMessages(c.chatId)}
                         >
@@ -150,7 +155,6 @@ export default function App() {
                     ))}
                 </aside>
 
-                {/* 메시지 영역 */}
                 <section style={styles.section}>
                     {!selectedChatId ? (
                         <div style={styles.empty}>왼쪽에서 방을 선택하세요</div>
@@ -162,7 +166,6 @@ export default function App() {
                                 {!loading && messages.length === 0 && (
                                     <div style={styles.empty}>메시지가 없습니다</div>
                                 )}
-                                {/* 메시지 출력 */}
                                 {messages.map((m) => (
                                     <div key={m.id} style={styles.msgRow}>
                                         <div style={styles.msgBubble}>
@@ -174,8 +177,6 @@ export default function App() {
                                     </div>
                                 ))}
                             </div>
-
-                            {/* 메시지 입력 폼 */}
                             <form onSubmit={sendMessage} style={styles.inputBar}>
                                 <input
                                     value={text}
@@ -190,7 +191,6 @@ export default function App() {
                 </section>
             </div>
 
-            {/* 에러 메시지 표시 */}
             {err && <div style={styles.error}>⚠ {err}</div>}
         </div>
     );

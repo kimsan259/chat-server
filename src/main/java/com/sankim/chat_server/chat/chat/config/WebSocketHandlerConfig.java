@@ -12,14 +12,13 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 @EnableWebSocket
 @RequiredArgsConstructor
 public class WebSocketHandlerConfig implements WebSocketConfigurer {
-
     private final ChatWebSocketHandler chatWebSocketHandler;
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(chatWebSocketHandler, "/ws-handler")
-                .addInterceptors(new WebSocketHandshakeInterceptor()) // userId 전달 인터셉터
-                .setAllowedOriginPatterns("http://localhost:5173", "http://127.0.0.1:5173");
-        // SockJS가 필요 없다면 .withSockJS()를 제거합니다.
+                .addInterceptors(new WebSocketHandshakeInterceptor())
+                .setAllowedOriginPatterns("http://localhost:5173", "http://127.0.0.1:5173")
+                .withSockJS();
     }
 }
