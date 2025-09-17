@@ -8,10 +8,6 @@ import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry;
 
-/**
- * 순수 WebSocket 핸들러를 /ws-handler 에 등록합니다.
- * Allowed origins에 프런트 포트(5173)를 허용해야 CORS 문제가 없습니다.
- */
 @Configuration
 @EnableWebSocket
 @RequiredArgsConstructor
@@ -22,8 +18,8 @@ public class WebSocketHandlerConfig implements WebSocketConfigurer {
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(chatWebSocketHandler, "/ws-handler")
-                .addInterceptors(new WebSocketHandshakeInterceptor())
-                .setAllowedOriginPatterns("http://localhost:5173", "http://127.0.0.1:5173")
-                .withSockJS(); // SockJS를 사용하면 구형 브라우저 지원
+                .addInterceptors(new WebSocketHandshakeInterceptor()) // userId 전달 인터셉터
+                .setAllowedOriginPatterns("http://localhost:5173", "http://127.0.0.1:5173");
+        // SockJS가 필요 없다면 .withSockJS()를 제거합니다.
     }
 }

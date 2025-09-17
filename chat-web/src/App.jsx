@@ -51,28 +51,13 @@ export default function App() {
      * - onclose: 연결 종료시 상태 초기화
      */
     useEffect(() => {
-        const sock = new SockJS(`/ws-handler?userId=${USER_ID}`);
-        sock.onopen = () => {
-            setConnected(true);
-        };
-        sock.onmessage = (event) => {
-            try {
-                const msg = JSON.parse(event.data);
-                // 최신순으로 추가 (서버가 최신순으로 보내므로 맨 앞에 삽입)
-                setMessages((prev) => [msg, ...prev]);
-            } catch {
-                // JSON 파싱 실패 시 무시
-            }
-        };
-        sock.onclose = () => {
-            setConnected(false);
-        };
-        setSocket(sock);
-
-        // 컴포넌트 언마운트 시 연결 종료
-        return () => {
-            sock.close();
-        };
+        // plain WebSocket으로 접속 (userId를 쿼리스트링으로 전달)
+        const ws = new WebSocket(`ws://localhost:8083/ws-handler?userId=${USER_ID}`);
+        ws.onopen = () => { setConnected(true); };
+        ws.onmessage = e => { const msg = JSON.parse(e.data); setMessages(prev => [msg, ...prev]); };
+        ws.onclose = () => { setConnected(false); };
+        setSocket(ws);
+        return () => { ws.close(); };
     }, []);
 
     /** 채팅방 목록 조회 (REST) */

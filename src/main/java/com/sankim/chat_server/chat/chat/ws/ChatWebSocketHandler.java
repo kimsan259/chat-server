@@ -1,4 +1,3 @@
-// src/main/java/com/sankim/chat_server/chat/chat/ws/ChatWebSocketHandler.java
 package com.sankim.chat_server.chat.chat.ws;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -18,8 +17,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * STOMP 없이 순수 WebSocket을 처리하는 핸들러.
- * - 세션 속성에 있는 userId를 이용해 클라이언트를 식별합니다.
- * - 들어온 메시지를 DB에 저장하고, 같은 방의 다른 세션으로 브로드캐스트합니다.
+ * - 세션 속성의 userId를 기준으로 사용자 세션을 관리하고,
+ * - 들어오는 메시지를 DB에 저장한 후 모든 사용자에게 브로드캐스트합니다.
  */
 @Slf4j
 @Component
@@ -28,13 +27,12 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
     private final MessageService messageService;
     private final ObjectMapper objectMapper = new ObjectMapper();
-
-    // 현재 접속 중인 세션을 userId 기준으로 관리
+    // 현재 접속 중인 세션을 userId ↔ WebSocketSession 형태로 저장
     private final Map<Long, WebSocketSession> sessions = new ConcurrentHashMap<>();
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
-        // HandshakeInterceptor 에서 넣어준 userId 속성 가져오기
+        // HandshakeInterceptor에서 userId를 세션 속성에 넣음
         String userId = (String) session.getAttributes().get("userId");
         if (userId != null) {
             sessions.put(Long.valueOf(userId), session);
@@ -44,20 +42,14 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
-        // 프런트에서 보내온 JSON을 DTO로 변환
+        // 브라우저에서 보내온 JSON을 DTO로 역직렬화
         SendMessageRequest req = objectMapper.readValue(message.getPayload(), SendMessageRequest.class);
-
-        // 세션 속성에 저장된 userId를 Long으로 변환
+        // 세션 속성에서 전송자 ID 추출
         Long senderId = Long.valueOf((String) session.getAttributes().get("userId"));
-
-        // 메시지를 DB에 저장하고 MessageResponse 응답을 받음
+        // 메시지 저장
         MessageResponse saved = messageService.sendMessage(senderId, req);
-
-        // 간단한 예: 연결된 모든 세션에 메시지를 전송
-        // 실제 서비스에서는 같은 chatId의 세션을 필터링해야 함
-        for (WebSocketSession ws : sessions.values()) {
-            ws.sendMessage(new TextMessage(objectMapper.writeValueAsString(saved)));
-        }
+        // 모든 사용자에게 브로드캐스트
+        broadcastMessage(saved);
     }
 
     @Override
@@ -69,16 +61,16 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
+    /** DB 커밋 후 실시간으로 메시지를 보내기 위한 메서드 */
     public void broadcastMessage(MessageResponse dto) {
-        // 메시지를 모든 접속자에게 전송
         try {
             String json = objectMapper.writeValueAsString(dto);
-            TextMessage textMessage = new TextMessage(json);
+            TextMessage tm = new TextMessage(json);
             for (WebSocketSession ws : sessions.values()) {
-                ws.sendMessage(textMessage);
+                ws.sendMessage(tm);
             }
-        } catch (Exception ex) {
-            log.error("웹소켓 브로드캐스트 실패", ex);
+        } catch (Exception e) {
+            log.error("브로드캐스트 실패", e);
         }
     }
 }
