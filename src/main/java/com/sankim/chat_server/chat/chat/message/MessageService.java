@@ -45,11 +45,11 @@ public class MessageService {
                 .contentType(req.contentType() == null ? "TEXT" : req.contentType())
                 .content(req.content())
                 .build();
-        messageRepo.save(msg); // msg.getId()가 여기서 결정됨
-
+        messageRepo.save(msg);  // ID가 채워짐
         MessageResponse dto = new MessageResponse(
                 msg.getId(), chat.getId(), sender.getId(),
                 msg.getContentType(), msg.getContent(), msg.getCreateAt(), 1L);
+
 
         // Kafka 발행
         kafkaTemplate.send("chat-messages", dto.chatId().toString(), dto);
