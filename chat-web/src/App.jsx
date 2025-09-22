@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import SockJS from 'sockjs-client/dist/sockjs.min.js';
 
-// 스타일 정의 (생략 가능)
+// 스타일 정의 (필요시 조정)
 const styles = {
     app: { fontFamily: "system-ui, Arial", height: "100vh", display: "flex", flexDirection: "column" },
     header: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: "1px solid #eee" },
@@ -28,7 +28,7 @@ const styles = {
 };
 
 export default function App() {
-    // (임시) 로그인 대신 사용자 고정
+    // 임시 로그인: 사용자 ID 고정
     const USER_ID = 1;
 
     // WebSocket 상태
@@ -44,8 +44,8 @@ export default function App() {
     const [err, setErr] = useState("");
 
     /**
-     * 1) 컴포넌트 마운트 시 SockJS 연결을 생성
-     *  - userId를 쿼리스트링으로 전달한다. 서버는 HandshakeInterceptor에서 세션 속성으로 저장.
+     * 1) 컴포넌트 마운트 시 SockJS 연결 생성
+     *   - userId를 쿼리스트링으로 전달: 서버 HandshakeInterceptor가 세션 속성에 저장.
      */
     useEffect(() => {
         const sock = new SockJS(`/ws-handler?userId=${USER_ID}`);
@@ -53,10 +53,10 @@ export default function App() {
         sock.onmessage = (event) => {
             try {
                 const msg = JSON.parse(event.data);
-                // 최신 메시지를 목록에 맨 앞에 추가
+                // 최신 메시지를 맨 앞에 추가
                 setMessages((prev) => [msg, ...prev]);
             } catch {
-                // JSON 파싱 실패 시 무시
+                // 파싱 실패 시 무시
             }
         };
         sock.onclose = () => setConnected(false);
@@ -68,7 +68,7 @@ export default function App() {
         };
     }, []);
 
-    /** 채팅방 목록을 불러오는 REST API 호출 */
+    /** 채팅방 목록을 불러오는 REST API */
     async function loadChats() {
         try {
             setErr("");
@@ -83,7 +83,7 @@ export default function App() {
         }
     }
 
-    /** 특정 채팅방의 메시지 목록을 불러오는 REST API 호출 */
+    /** 선택한 채팅방의 메시지 목록을 불러오는 REST API */
     async function loadMessages(chatId) {
         try {
             setErr("");
@@ -102,7 +102,7 @@ export default function App() {
         }
     }
 
-    /** 메시지 전송: JSON 형태로 socket.send */
+    /** 메시지 전송: SockJS로 JSON 전달 */
     async function sendMessage(e) {
         e.preventDefault();
         if (!selectedChatId || !text.trim() || !socket || socket.readyState !== 1) return;
@@ -133,7 +133,7 @@ export default function App() {
                 </div>
             </header>
 
-            {/* 좌측: 채팅방 목록 / 우측: 메시지 영역 */}
+            {/* 본문: 왼쪽 채팅방 목록 / 오른쪽 메시지 영역 */}
             <div style={styles.main}>
                 <aside style={styles.sidebar}>
                     <div style={styles.sidebarTitle}>내 채팅방</div>
@@ -190,7 +190,6 @@ export default function App() {
                     )}
                 </section>
             </div>
-
             {err && <div style={styles.error}>⚠ {err}</div>}
         </div>
     );
