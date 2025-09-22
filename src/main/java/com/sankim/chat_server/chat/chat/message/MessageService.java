@@ -7,10 +7,12 @@ import com.sankim.chat_server.chat.chat.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.*;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +27,9 @@ public class MessageService {
     private final UserChatRepository userChatRepo;
     private final ApplicationEventPublisher eventPublisher;
     private final RedissonClient redissonClient;
+
+@Autowired
+private KafkaTemplate<String, MessageResponse> kafkaTemplate;
 
     @Transactional
     @CacheEvict(value = "chatMessages", key = "#req.chatId() + ':' + '*'", allEntries = true)
@@ -59,6 +64,18 @@ public class MessageService {
         } finally {
             if (lock.isHeldByCurrentThread()) lock.unlock();
         }
+
+        MessageResponse dto = new MessageResponse(
+                msg.getId(), chat.getId(), sender.getId(),
+                msg.getContentType(), msg.getContent(), msg.getCreateAt(), 1L
+        );
+
+        // Kafka 토픽 발행
+        kafkaTemplate.send("chat-messages", dto.chatId().toString(), dto);
+
+        // 이벤트 발행은 유지 (WebSocket 브로드캐스트)
+        eventPublisher.publishEvent(new MessageCreatedEvent(dto));
+        return dto;
     }
 
     @Transactional(readOnly = true)
