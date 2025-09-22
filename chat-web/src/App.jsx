@@ -1,6 +1,6 @@
 // src/App.jsx
 import React, { useEffect, useState } from "react";
-import SockJS from "sockjs-client/dist/sockjs.min.js";
+import SockJS from 'sockjs-client/dist/sockjs.min.js';
 
 // 스타일 정의 (생략 가능)
 const styles = {

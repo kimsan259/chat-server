@@ -26,17 +26,13 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 @Component
 public class ChatWebSocketHandler extends TextWebSocketHandler {
-
     private final MessageService messageService;
     private final ObjectMapper objectMapper;
-
-    // 현재 접속 중인 세션을 (userId -> WebSocketSession) 형태로 저장
     private final Map<Long, WebSocketSession> sessions = new ConcurrentHashMap<>();
 
     @Autowired
     public ChatWebSocketHandler(@Lazy MessageService messageService) {
         this.messageService = messageService;
-        // Java 8 날짜/시간을 ISO-8601 문자열로 직렬화하기 위한 설정
         this.objectMapper = new ObjectMapper();
         this.objectMapper.registerModule(new JavaTimeModule());
         this.objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
@@ -44,36 +40,23 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
-        // HandshakeInterceptor에서 userId를 속성에 넣어줍니다.
         String userId = (String) session.getAttributes().get("userId");
-        if (userId != null) {
-            sessions.put(Long.valueOf(userId), session);
-            log.info("웹소켓 연결됨: userId={}", userId);
-        }
+        if (userId != null) sessions.put(Long.valueOf(userId), session);
     }
 
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
-        // 클라이언트에서 전송한 JSON을 SendMessageRequest DTO로 변환
         SendMessageRequest req = objectMapper.readValue(message.getPayload(), SendMessageRequest.class);
         Long senderId = Long.valueOf((String) session.getAttributes().get("userId"));
-        // 메시지를 DB에 저장
         messageService.sendMessage(senderId, req);
-        // 실제 브로드캐스트는 커밋 후 이벤트 리스너가 처리합니다.
     }
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         String userId = (String) session.getAttributes().get("userId");
-        if (userId != null) {
-            sessions.remove(Long.valueOf(userId));
-            log.info("웹소켓 연결 종료: userId={}", userId);
-        }
+        if (userId != null) sessions.remove(Long.valueOf(userId));
     }
 
-    /**
-     * DB 커밋 후 MessageBroadcastListener가 호출하는 브로드캐스트 메서드.
-     */
     public void broadcastMessage(MessageResponse dto) {
         try {
             String json = objectMapper.writeValueAsString(dto);
@@ -86,3 +69,4 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         }
     }
 }
+

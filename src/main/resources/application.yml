@@ -2,6 +2,8 @@ server:
   port: 8083
   shutdown: graceful
 
+
+
 spring:
   profiles:
     active: dev
@@ -33,4 +35,5 @@ logging:
     org.hibernate.SQL: debug
     com.zaxxer.hikari: DEBUG   # Hikari가 사용하는 jdbcUrl을 로그로 보여줌(진단용)
     root: INFO # 개발중 SQL 확인
+
 
