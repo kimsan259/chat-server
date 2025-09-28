@@ -53,8 +53,7 @@ export default function App() {
         sock.onmessage = (event) => {
             try {
                 const msg = JSON.parse(event.data);
-                // 최신 메시지를 맨 앞에 추가
-                setMessages((prev) => [msg, ...prev]);
+                setMessages(prev => [msg, ...prev]);  // 최신 메시지를 맨 앞에
             } catch {
                 // 파싱 실패 시 무시
             }

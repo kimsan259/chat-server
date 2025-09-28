@@ -1,6 +1,5 @@
 package com.sankim.chat_server.chat.chat.message;
 
-
 import com.sankim.chat_server.chat.chat.api.dto.MessageResponse;
 import com.sankim.chat_server.chat.chat.ws.ChatWebSocketHandler;
 import lombok.RequiredArgsConstructor;
@@ -14,7 +13,7 @@ public class KafkaMessageListener {
 
     @KafkaListener(topics = "chat-messages", groupId = "chat-consumer")
     public void listen(MessageResponse dto) {
-        chatWebSocketHandler.broadcastMessage(dto);
+        // Kafka로 받은 메시지를 웹소켓 브로드캐스트
+        // chatWebSocketHandler.broadcastMessage(dto);
     }
 }
-

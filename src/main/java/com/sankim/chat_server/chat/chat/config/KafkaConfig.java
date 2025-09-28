@@ -18,15 +18,15 @@ import java.util.Map;
 @EnableKafka
 public class KafkaConfig {
 
-    // Producer 설정
+    // Producer: key/value 직렬화 지정
     @Bean
     public ProducerFactory<String, MessageResponse> producerFactory() {
-        Map<String, Object> props = new HashMap<>();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+        Map<String, Object> configProps = new HashMap<>();
+        configProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        configProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        configProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
                 org.springframework.kafka.support.serializer.JsonSerializer.class);
-        return new DefaultKafkaProducerFactory<>(props);
+        return new DefaultKafkaProducerFactory<>(configProps);
     }
 
     @Bean
@@ -34,7 +34,7 @@ public class KafkaConfig {
         return new KafkaTemplate<>(producerFactory());
     }
 
-    // Consumer 설정
+    // Consumer: key/value 역직렬화 지정
     @Bean
     public ConsumerFactory<String, MessageResponse> consumerFactory() {
         Map<String, Object> props = new HashMap<>();

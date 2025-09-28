@@ -48,7 +48,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
         SendMessageRequest req = objectMapper.readValue(message.getPayload(), SendMessageRequest.class);
         Long senderId = Long.valueOf((String) session.getAttributes().get("userId"));
-        messageService.sendMessage(senderId, req);
+        messageService.sendMessage(senderId, req);  // 저장 후 Kafka 발행 + 이벤트
     }
 
     @Override
@@ -61,12 +61,11 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         try {
             String json = objectMapper.writeValueAsString(dto);
             TextMessage tm = new TextMessage(json);
-            for (WebSocketSession ws : sessions.values()) {
-                ws.sendMessage(tm);
-            }
+            for (WebSocketSession ws : sessions.values()) ws.sendMessage(tm);
         } catch (Exception e) {
             log.error("브로드캐스트 실패", e);
         }
     }
 }
+
 
